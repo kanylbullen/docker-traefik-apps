@@ -2,18 +2,22 @@ http:
   middlewares:
     dashboard-auth:
       basicAuth:
-        # generate with: htpasswd -nb admin 'yourpass'
+        # Use TRAEFIK_DASHBOARD_AUTH from .env
+        # Generate with: htpasswd -nb admin 'yourpassword'
         users:
-          - "admin:$apr1$Yj0M6N8V$6/5R9gV9Q0T1T/0P1sT9a/"  # placeholder example
+          - "${TRAEFIK_DASHBOARD_AUTH:-admin:$$apr1$$Yj0M6N8V$$6/5R9gV9Q0T1T/0P1sT9a/}"
 
   routers:
-    # traefik-dashboard:
-    #   rule: "Host(`traefik.${DOMAIN}`)"
-    #   entryPoints: [websecure]
-    #   service: api@internal
-    #   tls:
-    #     certresolver: letsencrypt
-    #   middlewares:
-    #     - compress
-    #     - security-headers
-    #     - dashboard-auth
+    # Uncomment to enable Traefik dashboard (secured with basic auth + IP whitelist)
+    traefik-dashboard:
+      rule: "Host(`traefik.${DOMAIN}`)"
+      entryPoints: [websecure]
+      service: api@internal
+      tls:
+        certresolver: letsencrypt
+      middlewares:
+        - compress@file
+        - security-headers@file
+        - dashboard-auth
+        - admin-allowlist@file
+        # Optional: remove admin-allowlist to allow public access (not recommended)

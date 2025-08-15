@@ -1,76 +1,120 @@
-# overview
+# 🏠 Docker Homelab Template
 
-minimal, opinionated docker-compose stack for a small self-hosted environment with:
+A production-ready, security-focused Docker Compose stack for quick homelab deployment with:
 
-- traefik (reverse proxy, let's encrypt via cloudflare dns)
-- tailscale (remote admin over your tailnet)
-- cloudflared (cloudflare tunnel; optional, for zero trust/public access without opening ports)
-- portainer (docker ui)
-- hello-world service (traefik/whoami)
+- **Traefik** - Reverse proxy with automatic HTTPS (Let's Encrypt via Cloudflare DNS)
+- **Tailscale** - Secure remote access to your homelab
+- **Cloudflare Tunnel** - Zero-trust public access (optional)
+- **Portainer** - Docker management UI
+- **Socket Proxy** - Secure Docker socket access for Traefik
 
-uses compose **profiles** so you can enable base and later add roles (wordpress, mysql, postgres, vaultwarden, plex, jellyfin, etc.). includes docker-socket-proxy to avoid giving traefik full rw access to the docker socket.
+## ✨ Features
 
----
+- 🔒 **Security-first** - Docker socket proxy, security headers, TLS 1.2+
+- 🏗️ **Modular** - Profile-based architecture for easy expansion
+- 🚀 **Quick deployment** - Automated setup scripts for Linux/Windows
+- 📱 **Production-ready** - Health checks, logging, restart policies
+- 🌐 **DNS challenge** - Wildcard certificates with Cloudflare
+- 🔧 **Easy management** - Helper scripts and aliases
 
-## repo layout
+## 🚀 Quick Start
 
-```
-.
-├─ .env.example
-├─ docker-compose.yml
-├─ traefik/
-│  ├─ traefik.yml                # static config
-│  ├─ dynamic/
-│  │  ├─ common.yml             # middlewares, tls options
-│  │  └─ dashboard.yml          # optional: secure dashboard router (basic auth)
-│  └─ acme/                     # letsencrypt storage (created at runtime)
-├─ cloudflared/
-│  └─ README.md                 # quick notes for tunnel token method
-└─ README.md
-```
-
----
-
-## quickstart
-
-1. copy env and edit secrets
+### 1. Clone and Configure
 
 ```bash
+git clone <your-repo-url>
+cd docker-traefik-apps
+
+# Copy and edit configuration
 cp .env.example .env
+# Edit .env with your settings
 ```
 
-set at minimum:
+### 2. Required Configuration
 
-- `DOMAIN=example.com`
-- `ACME_EMAIL=you@example.com`
-- `CF_DNS_API_TOKEN=` (cloudflare api token with **zone.dns.edit** on your zone)
-- `TS_AUTHKEY=` (tailscale **ephemeral** auth key is fine)
-- `CLOUDFLARED_TOKEN=` (only if you plan to use cloudflare tunnel)
-
-2. prepare traefik storage (permissions matter)
+Edit `.env` with these minimum values:
 
 ```bash
-mkdir -p traefik/acme
-# acme.json will be created inside this dir by traefik; directory must be writable by the container
-chmod 700 traefik/acme
+DOMAIN=yourdomain.com
+ACME_EMAIL=you@yourdomain.com
+CF_DNS_API_TOKEN=your_cloudflare_token
+TS_AUTHKEY=your_tailscale_auth_key
+TRAEFIK_DASHBOARD_AUTH=admin:$apr1$encoded_password
 ```
 
-3. bring up base profile
+### 3. Deploy
 
+**Linux/macOS:**
 ```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+.\setup.ps1
+```
+
+**Manual:**
+```bash
+# Create directories
+mkdir -p traefik/acme && chmod 700 traefik/acme
+
+# Start services
 docker compose --profile base up -d
 ```
 
-4. test
+## 🌐 Access Your Services
 
-- portainer: https://portainer.${DOMAIN}
-- hello world: https://whoami.${DOMAIN}
-- (optional) dashboard: see `traefik/dynamic/dashboard.yml` and uncomment if you want it public; otherwise reach it via tailscale on https://traefik.${DOMAIN}
+After deployment, access your services at:
 
-5. cloudflare dns
+- **Portainer**: `https://portainer.yourdomain.com`
+- **Whoami (test)**: `https://whoami.yourdomain.com` 
+- **Traefik Dashboard**: `https://traefik.yourdomain.com`
 
-- if **not** using cloudflared: create `A`/`AAAA` records for `portainer.${DOMAIN}`, `whoami.${DOMAIN}` (or a wildcard `*.${DOMAIN}`) pointing to your public ip.
-- if using **cloudflared tunnel**: after you set `CLOUDFLARED_TOKEN`, create public hostnames in cloudflare zero trust and point them to `http://traefik:80`. the container is on the same `proxy` network so `traefik` resolves.
+## 📋 Profiles & Management
+
+### Base Profile
+```bash
+docker compose --profile base up -d
+```
+Includes: Traefik, Portainer, Tailscale, Cloudflared, Socket-proxy
+
+### Helper Scripts
+Source the aliases for easier management:
+```bash
+source aliases.sh
+
+# Now you can use:
+dcup          # Start base profile
+dclogs        # View all logs
+dcps          # Show running services
+update-all    # Update all services
+show-urls     # Display service URLs
+```
+
+## 🔐 Security Features
+
+- ✅ Docker socket proxy (read-only access)
+- ✅ Security headers (HSTS, XSS protection, etc.)
+- ✅ TLS 1.2+ with modern cipher suites
+- ✅ IP whitelisting for admin services
+- ✅ Basic auth for Traefik dashboard
+- ✅ Wildcard certificates
+
+## 🌍 DNS Configuration
+
+### Option 1: Direct (Public IP)
+Create DNS records pointing to your server:
+```
+A    *.yourdomain.com  -> YOUR_PUBLIC_IP
+```
+
+### Option 2: Cloudflare Tunnel
+1. Create tunnel in Cloudflare Zero Trust
+2. Add `CLOUDFLARED_TOKEN` to `.env`
+3. Configure public hostnames pointing to `http://traefik:80`
 
 ---
 

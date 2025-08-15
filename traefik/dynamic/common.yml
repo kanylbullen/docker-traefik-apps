@@ -1,8 +1,12 @@
 http:
   middlewares:
+    # Compression for better performance
     compress:
-      compress: {}
+      compress:
+        excludedContentTypes:
+          - "text/event-stream"
 
+    # Enhanced security headers
     security-headers:
       headers:
         sslRedirect: true
@@ -14,16 +18,54 @@ http:
         referrerPolicy: "strict-origin-when-cross-origin"
         permissionsPolicy: "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
         frameDeny: true
+        customFrameOptionsValue: "SAMEORIGIN"
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
 
-    # example: ip whitelist for admin routes (edit to your ranges)
-    # admin-allowlist:
-    #   ipWhiteList:
-    #     sourceRange:
-    #       - 100.64.0.0/10   # tailscale cgnat range (adjust to your tailnet specifics)
+    # Rate limiting for public services
+    rate-limit:
+      rateLimit:
+        average: 100
+        period: 1m
+        burst: 50
 
-# sane tls defaults
+    # Admin IP whitelist (uncomment and customize for admin services)
+    admin-allowlist:
+      ipWhiteList:
+        sourceRange:
+          - "${ADMIN_IP_WHITELIST:-100.64.0.0/10}"  # Tailscale CGNAT range
+          - "127.0.0.1/32"
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+
+    # Default headers for all services
+    default-headers:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+          X-Real-IP: ""
+        customResponseHeaders:
+          X-Frame-Options: "SAMEORIGIN"
+          X-Content-Type-Options: "nosniff"
+
+# Enhanced TLS configuration
 tls:
   options:
     default:
       minVersion: VersionTLS12
+      maxVersion: VersionTLS13
+      sniStrict: true
+      cipherSuites:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+      curvePreferences:
+        - "CurveP521"
+        - "CurveP384"
+        - "X25519"
+    
+    # Modern TLS for newer clients
+    modern:
+      minVersion: VersionTLS13
       sniStrict: true

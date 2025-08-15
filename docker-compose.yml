@@ -1,6 +1,6 @@
 version: "3.9"
 
-name: homelab1
+name: homelab
 
 x-default-logging: &default-logging
   logging:
@@ -16,25 +16,38 @@ x-proxy-network: &proxy-network
   networks:
     - proxy
 
+x-common-env: &common-env
+  TZ: ${TZ:-UTC}
+
+x-security-labels: &security-labels
+  - "traefik.http.middlewares.secure-headers.headers.sslRedirect=true"
+  - "traefik.http.middlewares.secure-headers.headers.stsSeconds=63072000"
+  - "traefik.http.middlewares.secure-headers.headers.stsIncludeSubdomains=true"
+  - "traefik.http.middlewares.secure-headers.headers.browserXssFilter=true"
+  - "traefik.http.middlewares.secure-headers.headers.contentTypeNosniff=true"
+
 services:
   # safer access to docker api for traefik (read-only)
   socket-proxy:
     image: ${SOCKET_PROXY_IMAGE}
     <<: [*default-restart, *default-logging]
     environment:
-      - LOG_LEVEL=info
+      <<: *common-env
+      LOG_LEVEL: info
       # grant only what traefik needs
-      - CONTAINERS=1
-      - EVENTS=1
-      - NETWORKS=1
-      - SERVICES=1
-      - TASKS=1
-      - PING=1
-      - VERSION=1
+      CONTAINERS: 1
+      EVENTS: 1
+      NETWORKS: 1
+      SERVICES: 1
+      TASKS: 1
+      PING: 1
+      VERSION: 1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     expose:
       - "2375"
+    networks:
+      - socket-proxy
     profiles: [base]
 
   traefik:
@@ -45,9 +58,14 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      # Uncomment for SSH access through Traefik (useful for git over SSH)
+      # - "2222:2222"
     environment:
+      <<: *common-env
       # passed through to lego for dns-01 with cloudflare
-      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
+      # Optional: improve DNS challenge performance
+      CF_ZONE_API_TOKEN: ${CF_ZONE_API_TOKEN:-}
     volumes:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
@@ -57,6 +75,10 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
+      start_period: 30s
+    networks:
+      - proxy
+      - socket-proxy
     profiles: [base]
 
   # optional: cloudflare tunnel (no open ports; configure public hostnames in zero trust)
@@ -64,16 +86,18 @@ services:
     image: ${CLOUDFLARED_IMAGE}
     <<: [*default-restart, *default-logging, *proxy-network]
     depends_on:
-      - traefik
+      traefik:
+        condition: service_healthy
     command: tunnel run
     environment:
-      - TUNNEL_TOKEN=${CLOUDFLARED_TOKEN}
+      <<: *common-env
+      TUNNEL_TOKEN: ${CLOUDFLARED_TOKEN}
     profiles: [base]
 
   tailscale:
     image: ${TAILSCALE_IMAGE}
     <<: [*default-restart, *default-logging]
-    hostname: ${TS_HOSTNAME}
+    hostname: ${TS_HOSTNAME:-homelab}
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
@@ -81,10 +105,14 @@ services:
       - /dev/net/tun:/dev/net/tun
     network_mode: host
     environment:
-      - TS_AUTHKEY=${TS_AUTHKEY}
-      - TS_STATE_DIR=/var/lib/tailscale
-      - TS_ACCEPT_DNS=true
-      - TS_AUTH_ONCE=true
+      <<: *common-env
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_ACCEPT_DNS: true
+      TS_AUTH_ONCE: true
+      # Optional: advertise routes to your local network
+      TS_ROUTES: ${TS_ROUTES:-}
+      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:---advertise-exit-node}
     volumes:
       - tailscale:/var/lib/tailscale
     profiles: [base]
@@ -93,10 +121,19 @@ services:
     image: ${PORTAINER_IMAGE}
     <<: [*default-restart, *default-logging, *proxy-network]
     depends_on:
-      - traefik
+      traefik:
+        condition: service_healthy
+    environment:
+      <<: *common-env
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.portainer.rule=Host(`portainer.${DOMAIN}`)"
@@ -110,7 +147,10 @@ services:
     image: ${WHOAMI_IMAGE}
     <<: [*default-restart, *default-logging, *proxy-network]
     depends_on:
-      - traefik
+      traefik:
+        condition: service_healthy
+    environment:
+      <<: *common-env
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.whoami.rule=Host(`whoami.${DOMAIN}`)"
@@ -124,7 +164,13 @@ networks:
   proxy:
     name: proxy
     driver: bridge
+  socket-proxy:
+    name: socket-proxy
+    driver: bridge
+    internal: true
 
 volumes:
   portainer_data:
+    driver: local
   tailscale:
+    driver: local

@@ -15,6 +15,12 @@ entryPoints:
           permanent: true
   websecure:
     address: ":443"
+    http:
+      tls:
+        options: default@file
+  # Optional: SSH passthrough for git operations
+  # ssh:
+  #   address: ":2222"
 
 providers:
   file:
@@ -24,6 +30,7 @@ providers:
     endpoint: "tcp://socket-proxy:2375"
     network: "proxy"
     exposedByDefault: false
+    watch: true
 
 # let's encrypt via cloudflare dns challenge
 certificatesResolvers:
@@ -37,13 +44,32 @@ certificatesResolvers:
         resolvers:
           - "1.1.1.1:53"
           - "8.8.8.8:53"
-      # optional: pre-provision wildcard (uncomment and set DOMAIN env)
-      # domains:
-      #   - main: "${DOMAIN}"
-      #     sans:
-      #       - "*.${DOMAIN}"
+      # RECOMMENDED: pre-provision wildcard (uncomment and set DOMAIN env)
+      domains:
+        - main: "${DOMAIN}"
+          sans:
+            - "*.${DOMAIN}"
 
+# Better logging for troubleshooting
 log:
   level: INFO
+  format: json
 
-accessLog: {}
+accessLog:
+  format: json
+  filters:
+    # Don't log health checks and static assets
+    statusCodes: ["400-499", "500-599"]
+
+# Enable metrics (optional - for monitoring)
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+
+# Improve performance
+serversTransport:
+  insecureSkipVerify: false
+
+ping:
+  entryPoint: "traefik"
