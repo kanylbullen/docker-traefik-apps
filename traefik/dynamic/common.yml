@@ -1,0 +1,29 @@
+http:
+  middlewares:
+    compress:
+      compress: {}
+
+    security-headers:
+      headers:
+        sslRedirect: true
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+        frameDeny: true
+
+    # example: ip whitelist for admin routes (edit to your ranges)
+    # admin-allowlist:
+    #   ipWhiteList:
+    #     sourceRange:
+    #       - 100.64.0.0/10   # tailscale cgnat range (adjust to your tailnet specifics)
+
+# sane tls defaults
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: true

@@ -1,0 +1,49 @@
+# static config
+api:
+  dashboard: true
+  insecure: false
+
+# redirect http -> https
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+
+providers:
+  file:
+    directory: "/etc/traefik/dynamic"
+    watch: true
+  docker:
+    endpoint: "tcp://socket-proxy:2375"
+    network: "proxy"
+    exposedByDefault: false
+
+# let's encrypt via cloudflare dns challenge
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "${ACME_EMAIL}"
+      storage: /letsencrypt/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        delayBeforeCheck: 0
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+      # optional: pre-provision wildcard (uncomment and set DOMAIN env)
+      # domains:
+      #   - main: "${DOMAIN}"
+      #     sans:
+      #       - "*.${DOMAIN}"
+
+log:
+  level: INFO
+
+accessLog: {}

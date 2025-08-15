@@ -1,0 +1,19 @@
+http:
+  middlewares:
+    dashboard-auth:
+      basicAuth:
+        # generate with: htpasswd -nb admin 'yourpass'
+        users:
+          - "admin:$apr1$Yj0M6N8V$6/5R9gV9Q0T1T/0P1sT9a/"  # placeholder example
+
+  routers:
+    # traefik-dashboard:
+    #   rule: "Host(`traefik.${DOMAIN}`)"
+    #   entryPoints: [websecure]
+    #   service: api@internal
+    #   tls:
+    #     certresolver: letsencrypt
+    #   middlewares:
+    #     - compress
+    #     - security-headers
+    #     - dashboard-auth

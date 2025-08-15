@@ -1,0 +1,130 @@
+version: "3.9"
+
+name: homelab1
+
+x-default-logging: &default-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-default-restart: &default-restart
+  restart: unless-stopped
+
+x-proxy-network: &proxy-network
+  networks:
+    - proxy
+
+services:
+  # safer access to docker api for traefik (read-only)
+  socket-proxy:
+    image: ${SOCKET_PROXY_IMAGE}
+    <<: [*default-restart, *default-logging]
+    environment:
+      - LOG_LEVEL=info
+      # grant only what traefik needs
+      - CONTAINERS=1
+      - EVENTS=1
+      - NETWORKS=1
+      - SERVICES=1
+      - TASKS=1
+      - PING=1
+      - VERSION=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    expose:
+      - "2375"
+    profiles: [base]
+
+  traefik:
+    image: ${TRAEFIK_IMAGE}
+    <<: [*default-restart, *default-logging, *proxy-network]
+    depends_on:
+      - socket-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # passed through to lego for dns-01 with cloudflare
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - ./traefik/acme:/letsencrypt
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    profiles: [base]
+
+  # optional: cloudflare tunnel (no open ports; configure public hostnames in zero trust)
+  cloudflared:
+    image: ${CLOUDFLARED_IMAGE}
+    <<: [*default-restart, *default-logging, *proxy-network]
+    depends_on:
+      - traefik
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARED_TOKEN}
+    profiles: [base]
+
+  tailscale:
+    image: ${TAILSCALE_IMAGE}
+    <<: [*default-restart, *default-logging]
+    hostname: ${TS_HOSTNAME}
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    network_mode: host
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ACCEPT_DNS=true
+      - TS_AUTH_ONCE=true
+    volumes:
+      - tailscale:/var/lib/tailscale
+    profiles: [base]
+
+  portainer:
+    image: ${PORTAINER_IMAGE}
+    <<: [*default-restart, *default-logging, *proxy-network]
+    depends_on:
+      - traefik
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`portainer.${DOMAIN}`)"
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.portainer.middlewares=compress@file,security-headers@file"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+    profiles: [base]
+
+  whoami:
+    image: ${WHOAMI_IMAGE}
+    <<: [*default-restart, *default-logging, *proxy-network]
+    depends_on:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`whoami.${DOMAIN}`)"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.routers.whoami.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.whoami.middlewares=compress@file,security-headers@file"
+      - "traefik.http.services.whoami.loadbalancer.server.port=80"
+    profiles: [base]
+
+networks:
+  proxy:
+    name: proxy
+    driver: bridge
+
+volumes:
+  portainer_data:
+  tailscale:
