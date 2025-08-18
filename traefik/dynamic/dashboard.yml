@@ -8,7 +8,7 @@ http:
           - "${TRAEFIK_DASHBOARD_AUTH:-admin:$$apr1$$Yj0M6N8V$$6/5R9gV9Q0T1T/0P1sT9a/}"
 
   routers:
-    # Uncomment to enable Traefik dashboard (secured with basic auth + IP whitelist)
+    # Traefik dashboard for primary domain
     traefik-dashboard:
       rule: "Host(`traefik.${DOMAIN}`)"
       entryPoints: [websecure]
@@ -20,4 +20,16 @@ http:
         - security-headers@file
         - dashboard-auth
         - admin-allowlist@file
-        # Optional: remove admin-allowlist to allow public access (not recommended)
+    
+    # Additional domains (uncomment and configure if using DOMAIN2, DOMAIN3)
+    # traefik-dashboard-alt:
+    #   rule: "Host(`traefik.${DOMAIN2:-disabled.local}`)"
+    #   entryPoints: [websecure]
+    #   service: api@internal
+    #   tls:
+    #     certresolver: letsencrypt
+    #   middlewares:
+    #     - compress@file
+    #     - security-headers@file
+    #     - dashboard-auth
+    #     - admin-allowlist@file

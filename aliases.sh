@@ -108,14 +108,36 @@ update-all() {
     echo "If issues occur, restore with: ./backup.sh restore <backup-file>"
 }
 
-# Show service URLs
+# Show service URLs for all configured domains
 show-urls() {
     DOMAIN=$(grep DOMAIN .env | cut -d '=' -f2)
+    DOMAIN2=$(grep DOMAIN2 .env | cut -d '=' -f2 2>/dev/null || echo "")
+    DOMAIN3=$(grep DOMAIN3 .env | cut -d '=' -f2 2>/dev/null || echo "")
+    
     echo "=== Service URLs ==="
-    echo "Portainer:    https://portainer.$DOMAIN"
-    echo "Whoami:       https://whoami.$DOMAIN"
-    echo "Traefik:      https://traefik.$DOMAIN"
-    echo "Local Traefik: http://localhost:8080 (if exposed)"
+    echo "Primary Domain ($DOMAIN):"
+    echo "  Portainer:    https://portainer.$DOMAIN"
+    echo "  Whoami:       https://whoami.$DOMAIN"
+    echo "  Traefik:      https://traefik.$DOMAIN"
+    
+    if [[ -n "$DOMAIN2" && "$DOMAIN2" != "disabled.local" ]]; then
+        echo ""
+        echo "Secondary Domain ($DOMAIN2):"
+        echo "  Portainer:    https://portainer.$DOMAIN2"
+        echo "  Whoami:       https://whoami.$DOMAIN2"
+        echo "  Traefik:      https://traefik.$DOMAIN2"
+    fi
+    
+    if [[ -n "$DOMAIN3" && "$DOMAIN3" != "disabled.local" ]]; then
+        echo ""
+        echo "Third Domain ($DOMAIN3):"
+        echo "  Portainer:    https://portainer.$DOMAIN3"
+        echo "  Whoami:       https://whoami.$DOMAIN3"
+        echo "  Traefik:      https://traefik.$DOMAIN3"
+    fi
+    
+    echo ""
+    echo "Local Traefik API: http://localhost:8080 (if exposed)"
 }
 
 # Monitor logs from all services

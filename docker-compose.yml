@@ -145,10 +145,16 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
+      # Primary domain
       - "traefik.http.routers.portainer.rule=Host(`portainer.${DOMAIN}`)"
       - "traefik.http.routers.portainer.entrypoints=websecure"
       - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
       - "traefik.http.routers.portainer.middlewares=compress@file,security-headers@file"
+      # Additional domains (uncomment and configure if using DOMAIN2, DOMAIN3)
+      # - "traefik.http.routers.portainer-alt.rule=Host(`portainer.${DOMAIN2:-disabled.local}`)"
+      # - "traefik.http.routers.portainer-alt.entrypoints=websecure"
+      # - "traefik.http.routers.portainer-alt.tls.certresolver=letsencrypt"
+      # - "traefik.http.routers.portainer-alt.middlewares=compress@file,security-headers@file"
       - "traefik.http.services.portainer.loadbalancer.server.port=9000"
     profiles: [base]
 
@@ -162,10 +168,16 @@ services:
       <<: *common-env
     labels:
       - "traefik.enable=true"
+      # Primary domain
       - "traefik.http.routers.whoami.rule=Host(`whoami.${DOMAIN}`)"
       - "traefik.http.routers.whoami.entrypoints=websecure"
       - "traefik.http.routers.whoami.tls.certresolver=letsencrypt"
       - "traefik.http.routers.whoami.middlewares=compress@file,security-headers@file"
+      # Additional domains (uncomment and configure if using DOMAIN2, DOMAIN3)
+      # - "traefik.http.routers.whoami-alt.rule=Host(`whoami.${DOMAIN2:-disabled.local}`)"
+      # - "traefik.http.routers.whoami-alt.entrypoints=websecure"
+      # - "traefik.http.routers.whoami-alt.tls.certresolver=letsencrypt"
+      # - "traefik.http.routers.whoami-alt.middlewares=compress@file,security-headers@file"
       - "traefik.http.services.whoami.loadbalancer.server.port=80"
     profiles: [base]
 

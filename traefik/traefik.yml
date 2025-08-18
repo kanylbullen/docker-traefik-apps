@@ -44,11 +44,18 @@ certificatesResolvers:
         resolvers:
           - "1.1.1.1:53"
           - "8.8.8.8:53"
-      # RECOMMENDED: pre-provision wildcard (uncomment and set DOMAIN env)
+      # RECOMMENDED: pre-provision wildcards for multiple domains
       domains:
         - main: "${DOMAIN}"
           sans:
             - "*.${DOMAIN}"
+        # Add additional domains here (uncomment and configure)
+        # - main: "${DOMAIN2:-}"
+        #   sans:
+        #     - "*.${DOMAIN2:-}"
+        # - main: "${DOMAIN3:-}"
+        #   sans:
+        #     - "*.${DOMAIN3:-}"
 
 # Better logging for troubleshooting
 log:

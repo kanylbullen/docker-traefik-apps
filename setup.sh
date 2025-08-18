@@ -114,19 +114,29 @@ if [[ ${#missing_vars[@]} -gt 0 ]]; then
     exit 1
 fi
 
-# Validate domain format
-if [[ ! "$DOMAIN" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$ ]]; then
-    print_warning "Domain format may be invalid: $DOMAIN"
+# Validate domain formats
+domains=("$DOMAIN")
+if [[ -n "${DOMAIN2:-}" && "$DOMAIN2" != "disabled.local" ]]; then
+    domains+=("$DOMAIN2")
+fi
+if [[ -n "${DOMAIN3:-}" && "$DOMAIN3" != "disabled.local" ]]; then
+    domains+=("$DOMAIN3")
 fi
 
-# Test DNS resolution
-if command -v dig >/dev/null 2>&1; then
-    if dig +short "$DOMAIN" >/dev/null 2>&1; then
-        print_success "Domain DNS resolution successful"
-    else
-        print_warning "Domain DNS resolution failed - ensure DNS records are configured"
+for domain in "${domains[@]}"; do
+    if [[ ! "$domain" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$ ]]; then
+        print_warning "Domain format may be invalid: $domain"
     fi
-fi
+    
+    # Test DNS resolution
+    if command -v dig >/dev/null 2>&1; then
+        if dig +short "$domain" >/dev/null 2>&1; then
+            print_success "Domain DNS resolution successful: $domain"
+        else
+            print_warning "Domain DNS resolution failed: $domain - ensure DNS records are configured"
+        fi
+    fi
+done
 
 print_success "Configuration validated"
 
