@@ -1,12 +1,15 @@
-# PowerShell setup script for Windows
+# PowerShell setup script for Windows - Enhanced Version
 # =============================================================================
-# Homelab Quick Setup Script (Windows)
+# Homelab Quick Setup Script (Windows) - Enhanced
 # =============================================================================
 
 param(
     [switch]$Force,
     [string]$Profile = "base"
 )
+
+# Enhanced error handling
+$ErrorActionPreference = "Stop"
 
 # Colors for output
 $colors = @{
@@ -37,7 +40,75 @@ function Write-Error {
     Write-Host "✗ $Message" -ForegroundColor $colors.Red
 }
 
-Write-Header "Homelab Setup Script (Windows)"
+function Write-Info {
+    param($Message)
+    Write-Host "ℹ $Message" -ForegroundColor $colors.Cyan
+}
+
+# Cleanup function for error recovery
+function Invoke-Cleanup {
+    Write-Error "Setup failed, performing cleanup..."
+    try {
+        docker compose down --remove-orphans 2>$null
+        Write-Info "Cleanup completed. You can safely retry the setup."
+    } catch {
+        Write-Warning "Cleanup encountered issues, but continuing..."
+    }
+}
+
+# System requirements check
+function Test-SystemRequirements {
+    Write-Header "System Requirements Check"
+    
+    # Check available disk space (minimum 2GB)
+    $drive = Get-PSDrive -Name ([System.IO.Path]::GetPathRoot((Get-Location).Path).TrimEnd('\'))
+    $freeSpaceGB = [math]::Round($drive.Free / 1GB, 2)
+    
+    if ($freeSpaceGB -lt 2) {
+        Write-Error "Insufficient disk space. At least 2GB required, found: $freeSpaceGB GB"
+        exit 1
+    }
+    Write-Success "Sufficient disk space available: $freeSpaceGB GB"
+    
+    # Check if ports are available
+    $portsInUse = @()
+    try {
+        if (Get-NetTCPConnection -LocalPort 80 -ErrorAction SilentlyContinue) { $portsInUse += "80" }
+        if (Get-NetTCPConnection -LocalPort 443 -ErrorAction SilentlyContinue) { $portsInUse += "443" }
+    } catch {
+        # Ignore errors if unable to check ports
+    }
+    
+    if ($portsInUse.Count -gt 0) {
+        Write-Warning "Ports $($portsInUse -join ', ') appear to be in use. This may cause conflicts."
+        $continue = Read-Host "Continue anyway? (y/N)"
+        if ($continue -notmatch "^[Yy]$") {
+            exit 1
+        }
+    }
+    Write-Success "Required ports appear to be available"
+    
+    # Check Docker version
+    try {
+        $dockerVersion = docker version --format '{{.Server.Version}}' 2>$null
+        Write-Success "Docker version: $dockerVersion"
+    } catch {
+        Write-Success "Docker version: unknown"
+    }
+    
+    # Check Docker Compose version
+    try {
+        $composeVersion = docker compose version --short 2>$null
+        Write-Success "Docker Compose version: $composeVersion"
+    } catch {
+        Write-Success "Docker Compose version: unknown"
+    }
+}
+
+Write-Header "Homelab Setup Script (Windows) - Enhanced"
+
+# Run system requirements check
+Test-SystemRequirements
 
 # Check if .env exists
 if (-not (Test-Path ".env")) {

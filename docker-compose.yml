@@ -48,18 +48,27 @@ services:
       - "2375"
     networks:
       - socket-proxy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2375/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     profiles: [base]
 
   traefik:
     image: ${TRAEFIK_IMAGE}
     <<: [*default-restart, *default-logging, *proxy-network]
     depends_on:
-      - socket-proxy
+      socket-proxy:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
       # Uncomment for SSH access through Traefik (useful for git over SSH)
       # - "2222:2222"
+      # Uncomment to expose API locally (development only)
+      # - "8080:8080"
     environment:
       <<: *common-env
       # passed through to lego for dns-01 with cloudflare

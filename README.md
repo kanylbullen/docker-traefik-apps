@@ -12,10 +12,13 @@ A production-ready, security-focused Docker Compose stack for quick homelab depl
 
 - 🔒 **Security-first** - Docker socket proxy, security headers, TLS 1.2+
 - 🏗️ **Modular** - Profile-based architecture for easy expansion
-- 🚀 **Quick deployment** - Automated setup scripts for Linux/Windows
+- 🚀 **Quick deployment** - Enhanced automated setup scripts for Linux/Windows
 - 📱 **Production-ready** - Health checks, logging, restart policies
 - 🌐 **DNS challenge** - Wildcard certificates with Cloudflare
 - 🔧 **Easy management** - Helper scripts and aliases
+- 📊 **Monitoring** - Built-in health checks and system monitoring
+- 💾 **Backup & Recovery** - Automated backup and restore functionality
+- 🛠️ **Troubleshooting** - Comprehensive diagnostic and repair tools
 
 ## 🚀 Quick Start
 
@@ -90,8 +93,49 @@ source aliases.sh
 dcup          # Start base profile
 dclogs        # View all logs
 dcps          # Show running services
-update-all    # Update all services
+update-all    # Update all services (with backup)
 show-urls     # Display service URLs
+health        # Run health checks
+backup        # Create backup
+troubleshoot  # Run diagnostics
+```
+
+## 🔧 Management & Monitoring
+
+### Health Monitoring
+```bash
+# Comprehensive health check
+./health-check.sh
+
+# Specific checks
+./health-check.sh services    # Service status
+./health-check.sh network     # Network connectivity
+./health-check.sh certs       # SSL certificates
+./health-check.sh resources   # Resource usage
+```
+
+### Backup & Recovery
+```bash
+# Create backup
+./backup.sh backup
+
+# List backups
+./backup.sh list
+
+# Restore from backup
+./backup.sh restore backups/homelab-backup-YYYYMMDD-HHMMSS.tar.gz
+
+# Cleanup old backups
+./backup.sh cleanup
+```
+
+### Troubleshooting
+```bash
+# Quick diagnostics
+source aliases.sh && troubleshoot
+
+# Detailed troubleshooting guide
+cat TROUBLESHOOTING.md
 ```
 
 ## 🔐 Security Features
