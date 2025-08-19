@@ -1,0 +1,60 @@
+networks:
+  proxy:
+    external: true
+    name: docker-traefik-apps_proxy
+
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-15}
+    container_name: ${COMPOSE_PROJECT_NAME}-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-homelab}
+      POSTGRES_USER: ${POSTGRES_USER:-homelab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: ${POSTGRES_INITDB_ARGS:---auth-host=md5}
+    volumes:
+      - /opt/homelab/instances/${COMPOSE_PROJECT_NAME}/data/postgres:/var/lib/postgresql/data
+      - ./config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-homelab} -d ${POSTGRES_DB:-homelab}"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 30s
+    labels:
+      - "traefik.enable=${EXPOSE_POSTGRES:-false}"
+      - "traefik.tcp.routers.postgres.rule=HostSNI(`postgres.${DOMAIN:-localhost}`)"
+      - "traefik.tcp.routers.postgres.entrypoints=postgres"
+      - "traefik.tcp.routers.postgres.tls.certresolver=letsencrypt"
+      - "traefik.tcp.services.postgres.loadbalancer.server.port=5432"
+
+  # pgAdmin for web-based PostgreSQL management
+  pgadmin:
+    image: dpage/pgadmin4:7
+    container_name: ${COMPOSE_PROJECT_NAME}-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@localhost}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    volumes:
+      - /opt/homelab/instances/${COMPOSE_PROJECT_NAME}/data/pgadmin:/var/lib/pgadmin
+      - ./config/servers.json:/pgadmin4/servers.json:ro
+    networks:
+      - proxy
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgadmin-${INSTANCE_NAME}.rule=Host(`${INSTANCE_SUBDOMAIN}pgadmin.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.pgadmin-${INSTANCE_NAME}.entrypoints=websecure"
+      - "traefik.http.routers.pgadmin-${INSTANCE_NAME}.tls.certresolver=letsencrypt"
+      - "traefik.http.services.pgadmin-${INSTANCE_NAME}.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.pgadmin-auth-${INSTANCE_NAME}.basicauth.users=${POSTGRES_DASHBOARD_AUTH:-}"
+      - "traefik.http.routers.pgadmin-${INSTANCE_NAME}.middlewares=pgadmin-auth-${INSTANCE_NAME},compress@file,security-headers@file"

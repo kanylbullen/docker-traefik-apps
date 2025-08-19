@@ -1,0 +1,67 @@
+networks:
+  proxy:
+    external: true
+    name: docker-traefik-apps_proxy
+
+services:
+  wordpress:
+    image: wordpress:${WORDPRESS_VERSION:-6.3}-php8.2-apache
+    container_name: ${COMPOSE_PROJECT_NAME}-wordpress
+    restart: unless-stopped
+    environment:
+      WORDPRESS_DB_HOST: ${WORDPRESS_DB_HOST:-mysql}
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME:-wordpress}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER:-wordpress}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+      
+      # WordPress Security Keys
+      WORDPRESS_AUTH_KEY: ${WORDPRESS_AUTH_KEY}
+      WORDPRESS_SECURE_AUTH_KEY: ${WORDPRESS_SECURE_AUTH_KEY}
+      WORDPRESS_LOGGED_IN_KEY: ${WORDPRESS_LOGGED_IN_KEY}
+      WORDPRESS_NONCE_KEY: ${WORDPRESS_NONCE_KEY}
+      WORDPRESS_AUTH_SALT: ${WORDPRESS_AUTH_SALT}
+      WORDPRESS_SECURE_AUTH_SALT: ${WORDPRESS_SECURE_AUTH_SALT}
+      WORDPRESS_LOGGED_IN_SALT: ${WORDPRESS_LOGGED_IN_SALT}
+      WORDPRESS_NONCE_SALT: ${WORDPRESS_NONCE_SALT}
+      
+      # WordPress Configuration
+      WORDPRESS_DEBUG: ${WORDPRESS_DEBUG:-false}
+      WORDPRESS_CONFIG_EXTRA: ${WORDPRESS_CONFIG_EXTRA:-}
+    volumes:
+      - /opt/homelab/instances/${COMPOSE_PROJECT_NAME}/data/wordpress:/var/www/html
+      - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/wp-admin/install.php"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wordpress-${INSTANCE_NAME}.rule=Host(`${WORDPRESS_SUBDOMAIN}.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.wordpress-${INSTANCE_NAME}.entrypoints=websecure"
+      - "traefik.http.routers.wordpress-${INSTANCE_NAME}.tls.certresolver=letsencrypt"
+      - "traefik.http.services.wordpress-${INSTANCE_NAME}.loadbalancer.server.port=80"
+      - "traefik.http.routers.wordpress-${INSTANCE_NAME}.middlewares=compress@file,security-headers@file"
+      
+  # WordPress CLI for management
+  wp-cli:
+    image: wordpress:cli-php8.2
+    container_name: ${COMPOSE_PROJECT_NAME}-wp-cli
+    restart: "no"
+    environment:
+      WORDPRESS_DB_HOST: ${WORDPRESS_DB_HOST:-mysql}
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME:-wordpress}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER:-wordpress}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+    volumes:
+      - /opt/homelab/instances/${COMPOSE_PROJECT_NAME}/data/wordpress:/var/www/html
+    networks:
+      - proxy
+    depends_on:
+      wordpress:
+        condition: service_healthy
+    profiles:
+      - cli

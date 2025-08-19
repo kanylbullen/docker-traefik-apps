@@ -1,0 +1,27 @@
+MySQL Database Server (Instance: ${INSTANCE_NAME})
+
+Access Information:
+• phpMyAdmin: https://${INSTANCE_SUBDOMAIN}phpmyadmin.${DOMAIN}
+• Database Host: ${COMPOSE_PROJECT_NAME}-mysql (from other containers)
+• Database Port: 3306
+
+Database Credentials:
+• Root Password: ${MYSQL_ROOT_PASSWORD}
+• Database: ${MYSQL_DATABASE}
+• User: ${MYSQL_USER}
+• Password: ${MYSQL_PASSWORD}
+
+Connection from other containers:
+  Host: ${COMPOSE_PROJECT_NAME}-mysql
+  Port: 3306
+  Database: ${MYSQL_DATABASE}
+  Username: ${MYSQL_USER}
+  Password: ${MYSQL_PASSWORD}
+
+Connection string example:
+  mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${COMPOSE_PROJECT_NAME}-mysql:3306/${MYSQL_DATABASE}
+
+Management:
+• View logs: ./install-role.sh mysql ${INSTANCE_NAME} logs
+• Check status: ./install-role.sh mysql ${INSTANCE_NAME} status
+• Update: ./install-role.sh mysql ${INSTANCE_NAME} update

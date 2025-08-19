@@ -1,0 +1,58 @@
+networks:
+  proxy:
+    external: true
+    name: docker-traefik-apps_proxy
+
+services:
+  mysql:
+    image: mysql:${MYSQL_VERSION:-8.0}
+    container_name: ${COMPOSE_PROJECT_NAME}-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-homelab}
+      MYSQL_USER: ${MYSQL_USER:-homelab}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ALLOW_EMPTY_PASSWORD: ${MYSQL_ALLOW_EMPTY_PASSWORD:-false}
+      MYSQL_RANDOM_ROOT_PASSWORD: ${MYSQL_RANDOM_ROOT_PASSWORD:-false}
+    volumes:
+      - /opt/homelab/instances/${COMPOSE_PROJECT_NAME}/data/mysql:/var/lib/mysql
+      - ./config/mysql.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 30s
+    labels:
+      - "traefik.enable=${EXPOSE_MYSQL:-false}"
+      - "traefik.tcp.routers.mysql-${INSTANCE_NAME}.rule=HostSNI(`${INSTANCE_SUBDOMAIN}mysql.${DOMAIN:-localhost}`)"
+      - "traefik.tcp.routers.mysql-${INSTANCE_NAME}.entrypoints=mysql"
+      - "traefik.tcp.routers.mysql-${INSTANCE_NAME}.tls.certresolver=letsencrypt"
+      - "traefik.tcp.services.mysql-${INSTANCE_NAME}.loadbalancer.server.port=3306"
+
+  # phpMyAdmin for web-based MySQL management
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:5.2
+    container_name: ${COMPOSE_PROJECT_NAME}-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_ABSOLUTE_URI: https://${INSTANCE_SUBDOMAIN}phpmyadmin.${DOMAIN:-localhost}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    networks:
+      - proxy
+    depends_on:
+      mysql:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.phpmyadmin-${INSTANCE_NAME}.rule=Host(`${INSTANCE_SUBDOMAIN}phpmyadmin.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.phpmyadmin-${INSTANCE_NAME}.entrypoints=websecure"
+      - "traefik.http.routers.phpmyadmin-${INSTANCE_NAME}.tls.certresolver=letsencrypt"
+      - "traefik.http.services.phpmyadmin-${INSTANCE_NAME}.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.phpmyadmin-auth-${INSTANCE_NAME}.basicauth.users=${MYSQL_DASHBOARD_AUTH:-}"
+      - "traefik.http.routers.phpmyadmin-${INSTANCE_NAME}.middlewares=phpmyadmin-auth-${INSTANCE_NAME},compress@file,security-headers@file"

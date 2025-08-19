@@ -3,6 +3,9 @@
 .env.local
 .env.production
 
+# Role instances (contains sensitive data and configurations)
+instances/
+
 # Traefik ACME storage (contains certificates)
 traefik/acme/
 traefik/acme/acme.json
