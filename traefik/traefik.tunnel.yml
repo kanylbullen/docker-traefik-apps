@@ -1,0 +1,73 @@
+# Traefik Configuration for Cloudflare Tunnel Deployment
+# This config is optimized for tunnel access with internal SSL termination
+
+# API and Dashboard
+api:
+  dashboard: true
+  debug: false
+
+# Entry points
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entrypoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+  traefik:
+    address: ":8080"
+
+# File provider for dynamic configuration
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+  # Docker provider
+  docker:
+    endpoint: "tcp://socket-proxy:2375"
+    network: "proxy"
+    exposedByDefault: false
+    watch: true
+
+# Let's Encrypt via Cloudflare DNS challenge (for internal certs)
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "x@xuper.fun"
+      storage: /letsencrypt/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        delayBeforeCheck: 0
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+
+# Logging optimized for tunnel deployment
+log:
+  level: INFO
+  format: json
+
+accessLog:
+  format: json
+  filters:
+    statusCodes:
+      - "400-499"
+      - "500-599"
+
+# Metrics for monitoring
+metrics:
+  prometheus:
+    entryPoint: traefik
+
+# Health check
+ping:
+  entryPoint: traefik
+
+# Global settings
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false

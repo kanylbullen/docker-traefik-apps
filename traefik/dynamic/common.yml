@@ -33,7 +33,7 @@ http:
     admin-allowlist:
       ipWhiteList:
         sourceRange:
-          - "${ADMIN_IP_WHITELIST:-100.64.0.0/10}"  # Tailscale CGNAT range
+          - "100.64.0.0/10"  # Tailscale CGNAT range
           - "127.0.0.1/32"
           - "10.0.0.0/8"
           - "172.16.0.0/12"

@@ -1,0 +1,153 @@
+# Public Tunnel Access - No Port Forwarding Required
+# Uses Cloudflare Tunnel for secure public access
+# Traefik used for internal routing and SSL termination
+
+version: '3.8'
+
+networks:
+  proxy:
+    external: false
+
+volumes:
+  portainer_data:
+
+services:
+  # Docker Socket Proxy for security
+  socket-proxy:
+    image: ${SOCKET_PROXY_IMAGE:-ghcr.io/tecnativa/docker-socket-proxy:0.1.1}
+    container_name: ${COMPOSE_PROJECT_NAME:-homelab}-socket-proxy
+    restart: unless-stopped
+    privileged: true
+    userns_mode: host
+    environment:
+      CONTAINERS: 1
+      SERVICES: 1
+      TASKS: 1
+      NETWORKS: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "2375"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Traefik Reverse Proxy (internal routing)
+  traefik:
+    image: ${TRAEFIK_IMAGE:-traefik:v3.0}
+    container_name: ${COMPOSE_PROJECT_NAME:-homelab}-traefik
+    restart: unless-stopped
+    depends_on:
+      socket-proxy:
+        condition: service_healthy
+    command:
+      - --configfile=/etc/traefik/traefik.tunnel.yml
+    environment:
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
+      CF_ZONE_API_TOKEN: ${CF_ZONE_API_TOKEN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Dashboard
+    volumes:
+      - ./traefik:/etc/traefik:ro
+      - ./traefik/acme:/letsencrypt
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.service=api@internal"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Cloudflare Tunnel
+  cloudflared:
+    image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2024.2.1}
+    container_name: ${COMPOSE_PROJECT_NAME:-homelab}-cloudflared
+    restart: unless-stopped
+    depends_on:
+      - traefik
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARED_TOKEN}
+    command: tunnel run
+    networks:
+      - proxy
+
+  # Portainer for container management
+  portainer:
+    image: ${PORTAINER_IMAGE:-portainer/portainer-ce:2.19.4}
+    container_name: ${COMPOSE_PROJECT_NAME:-homelab}-portainer
+    restart: unless-stopped
+    depends_on:
+      - traefik
+    environment:
+      TZ: ${TZ:-UTC}
+    volumes:
+      - portainer_data:/data
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`portainer.${DOMAIN}`)"
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Test service
+  whoami:
+    image: ${WHOAMI_IMAGE:-traefik/whoami:v1.10.1}
+    container_name: ${COMPOSE_PROJECT_NAME:-homelab}-whoami
+    restart: unless-stopped
+    depends_on:
+      - traefik
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`whoami.${DOMAIN}`)"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.routers.whoami.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.whoami.middlewares=security-headers@file"
+
+  # Tailscale (optional, profile-based)
+  tailscale:
+    image: ${TAILSCALE_IMAGE:-tailscale/tailscale:v1.58.2}
+    container_name: ${COMPOSE_PROJECT_NAME:-homelab}-tailscale
+    hostname: ${TS_HOSTNAME:-homelab}
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_ROUTES: ${TS_ROUTES}
+      TS_EXTRA_ARGS: --advertise-exit-node
+      TS_STATE_DIR: /var/lib/tailscale
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+      - tailscale_data:/var/lib/tailscale
+    profiles:
+      - tailscale
+      - vpn
+
+volumes:
+  tailscale_data:

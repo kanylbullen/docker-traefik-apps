@@ -36,7 +36,7 @@ providers:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: "${ACME_EMAIL}"
+      email: "x@xuper.fun"
       storage: /letsencrypt/acme.json
       dnsChallenge:
         provider: cloudflare
@@ -44,18 +44,11 @@ certificatesResolvers:
         resolvers:
           - "1.1.1.1:53"
           - "8.8.8.8:53"
-      # RECOMMENDED: pre-provision wildcards for multiple domains
-      domains:
-        - main: "${DOMAIN}"
-          sans:
-            - "*.${DOMAIN}"
-        # Add additional domains here (uncomment and configure)
-        # - main: "${DOMAIN2:-}"
-        #   sans:
-        #     - "*.${DOMAIN2:-}"
-        # - main: "${DOMAIN3:-}"
-        #   sans:
-        #     - "*.${DOMAIN3:-}"
+      # RECOMMENDED: pre-provision wildcard certificate
+      # domains:
+      #   - main: "${DOMAIN}"
+      #     sans:
+      #       - "*.${DOMAIN}"
 
 # Better logging for troubleshooting
 log:

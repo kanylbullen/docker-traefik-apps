@@ -1,0 +1,42 @@
+# Local Development Dynamic Configuration
+# This configuration is for local network access without SSL
+
+http:
+  routers:
+    # Traefik Dashboard - Local Access
+    traefik-dashboard-local:
+      rule: "Host(`traefik.local`)"
+      entryPoints:
+        - "web"
+      service: "api@internal"
+      middlewares:
+        - "local-only"
+
+  middlewares:
+    # Local network access only
+    local-only:
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"      # Localhost
+          - "10.0.0.0/8"        # Private Class A
+          - "172.16.0.0/12"     # Private Class B  
+          - "192.168.0.0/16"    # Private Class C
+
+    # Security headers for local development
+    local-security:
+      headers:
+        contentTypeNosniff: true
+        browserXssFilter: true
+        forceSTSHeader: false  # Disable HTTPS redirect for local
+        
+    # Basic auth for sensitive services (optional)
+    local-auth:
+      basicAuth:
+        users:
+          - "admin:$2y$10$hBcoTrigFPjpB9yDMurlNeqb3HgzHyCkkT.LKsWRrPuQE9a1XWWNK"  # admin/admin
+
+# TLS configuration - disable for local
+tls:
+  options:
+    default:
+      minVersion: "VersionTLS12"

@@ -5,12 +5,12 @@ http:
         # Use TRAEFIK_DASHBOARD_AUTH from .env
         # Generate with: htpasswd -nb admin 'yourpassword'
         users:
-          - "${TRAEFIK_DASHBOARD_AUTH:-admin:$$apr1$$Yj0M6N8V$$6/5R9gV9Q0T1T/0P1sT9a/}"
+          - "admin:$$apr1$$Vwj2VjoW$$vKvCxqmNP64x/OoWY7NCK/"
 
   routers:
     # Traefik dashboard for primary domain
     traefik-dashboard:
-      rule: "Host(`traefik.${DOMAIN}`)"
+      rule: "Host(`traefik.xuper.fun`)"
       entryPoints: [websecure]
       service: api@internal
       tls:
