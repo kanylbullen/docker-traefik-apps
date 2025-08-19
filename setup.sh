@@ -229,6 +229,47 @@ check_system_requirements
 # Check and install Docker if needed
 check_and_install_docker
 
+# Check container environment and adjust services
+check_container_environment() {
+    print_header "Container Environment Check"
+    
+    # Detect if running in LXC/container
+    if systemd-detect-virt >/dev/null 2>&1; then
+        VIRT_TYPE=$(systemd-detect-virt)
+        print_info "Detected virtualization: $VIRT_TYPE"
+        
+        if [[ "$VIRT_TYPE" == "lxc" ]]; then
+            print_warning "Running in LXC container - Tailscale requires host configuration"
+            
+            # Check if TUN device is available
+            if [[ ! -e /dev/net/tun ]]; then
+                print_warning "TUN device not available - Tailscale will be disabled"
+                print_info ""
+                print_info "🔧 To enable Tailscale in Proxmox LXC:"
+                print_info "1. Exit this container and run on the Proxmox VE host:"
+                print_info "   bash -c \"\$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/misc/add-tailscale-lxc.sh)\""
+                print_info "2. Follow the script prompts to configure your container"
+                print_info "3. Restart this container and re-run the setup"
+                print_info ""
+                print_info "📖 More info: https://community-scripts.github.io/ProxmoxVE/scripts?id=add-tailscale-lxc"
+                print_info ""
+                print_info "🌐 Alternative: Use Cloudflare Tunnel for remote access (works without TUN device)"
+                
+                # Set flag to skip Tailscale
+                export SKIP_TAILSCALE=true
+            else
+                print_success "TUN device available - Tailscale should work"
+                print_info "Tailscale appears to be properly configured for this LXC container"
+            fi
+        fi
+    else
+        print_success "Running on bare metal or VM - all features should work"
+    fi
+}
+
+# Check container environment
+check_container_environment
+
 # Check if .env exists
 if [[ ! -f ".env" ]]; then
     print_warning ".env file not found. Copying from .env.example..."
@@ -306,12 +347,22 @@ print_success "Created backups directory"
 
 # Pull images
 print_header "Pulling Images"
-docker compose --profile base pull
+if [[ "${SKIP_TAILSCALE:-false}" == "true" ]]; then
+    print_info "Skipping Tailscale due to LXC environment"
+    docker compose pull traefik portainer socket-proxy whoami cloudflared
+else
+    docker compose --profile base pull
+fi
 print_success "Images pulled successfully"
 
 # Start services
 print_header "Starting Services"
-docker compose --profile base up -d
+if [[ "${SKIP_TAILSCALE:-false}" == "true" ]]; then
+    print_info "Starting services without Tailscale"
+    docker compose up -d traefik portainer socket-proxy whoami cloudflared
+else
+    docker compose --profile base up -d
+fi
 print_success "Services started"
 
 # Wait for services to be healthy
@@ -347,7 +398,12 @@ fi
 
 # Check service status
 print_header "Service Status"
-docker compose --profile base ps
+if [[ "${SKIP_TAILSCALE:-false}" == "true" ]]; then
+    docker compose ps traefik portainer socket-proxy whoami cloudflared
+    print_info "Note: Tailscale skipped due to LXC environment"
+else
+    docker compose --profile base ps
+fi
 
 # Show access information
 print_header "Access Information"
@@ -371,10 +427,23 @@ print_header "Running Setup Validation"
 ./validate.sh
 
 print_header "Next Steps"
-echo -e "1. ${YELLOW}Test your setup:${NC} Visit https://whoami.${DOMAIN}"
-echo -e "2. ${YELLOW}Monitor logs:${NC} Run 'source aliases.sh && dclogs'"
-echo -e "3. ${YELLOW}Add more services:${NC} Check profiles in docker-compose.yml"
-echo -e "4. ${YELLOW}Backup:${NC} Consider setting up automated backups"
+if [[ "${SKIP_TAILSCALE:-false}" == "true" ]]; then
+    echo -e "1. ${YELLOW}Test your setup:${NC} Visit https://whoami.${DOMAIN}"
+    echo -e "2. ${YELLOW}Monitor logs:${NC} Run 'source aliases.sh && dclogs'"
+    echo -e "3. ${YELLOW}Enable Tailscale (optional):${NC} Run the Proxmox community script on the host:"
+    echo -e "   ${BLUE}bash -c \"\$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/misc/add-tailscale-lxc.sh)\"${NC}"
+    echo -e "4. ${YELLOW}Alternative remote access:${NC} Configure CLOUDFLARED_TOKEN in .env"
+    echo -e "5. ${YELLOW}Add more services:${NC} Check profiles in docker-compose.yml"
+    echo -e "6. ${YELLOW}Backup:${NC} Consider setting up automated backups"
+else
+    echo -e "1. ${YELLOW}Test your setup:${NC} Visit https://whoami.${DOMAIN}"
+    echo -e "2. ${YELLOW}Monitor logs:${NC} Run 'source aliases.sh && dclogs'"
+    echo -e "3. ${YELLOW}Add more services:${NC} Check profiles in docker-compose.yml"
+    echo -e "4. ${YELLOW}Backup:${NC} Consider setting up automated backups"
+fi
 echo ""
 print_info "For troubleshooting, check: docker compose logs traefik"
 print_info "For detailed diagnostics: ./health-check.sh"
+if [[ "${SKIP_TAILSCALE:-false}" == "true" ]]; then
+    print_info "LXC-specific guide: cat LXC-SETUP.md"
+fi

@@ -124,7 +124,7 @@ services:
       TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:---advertise-exit-node}
     volumes:
       - tailscale:/var/lib/tailscale
-    profiles: [base]
+    profiles: [base, tailscale]
 
   portainer:
     image: ${PORTAINER_IMAGE}
