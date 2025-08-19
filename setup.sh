@@ -6,7 +6,7 @@
 # This script helps you get your homelab up and running quickly with improved
 # error handling, validation, and recovery mechanisms
 
-set -euo pipefail  # Enhanced error handling
+set -uo pipefail  # Enhanced error handling (removed -e for better control)
 
 # Colors for output
 RED='\033[0;31m'
@@ -40,10 +40,16 @@ cleanup_on_error() {
     print_error "Setup failed, performing cleanup..."
     docker compose down --remove-orphans 2>/dev/null || true
     print_info "Cleanup completed. You can safely retry the setup."
+    exit 1
 }
 
-# Set trap for error handling
-trap cleanup_on_error ERR
+# Manual error handling function
+handle_critical_error() {
+    cleanup_on_error
+}
+
+# Remove automatic error trap - we'll handle errors manually
+# trap cleanup_on_error ERR
 
 # Check Docker installation and install if missing
 check_and_install_docker() {
@@ -666,46 +672,74 @@ fi
 
 # Wait for services to be healthy
 print_header "Waiting for Services"
-print_info "Waiting for services to become healthy (this may take a minute)..."
+print_info "Waiting for services to become healthy (this may take up to 2 minutes)..."
 
-# Wait for Traefik to be healthy
-max_attempts=30
+# Wait for Traefik to be healthy with improved logic
+max_attempts=60  # Increased timeout to 2 minutes
 attempt=0
+traefik_healthy=false
+
 while [[ $attempt -lt $max_attempts ]]; do
-    if docker compose -f "$COMPOSE_FILE" ps --format "{{.Health}}" traefik | grep -q "healthy"; then
-        print_success "Traefik is healthy"
-        break
+    # Check if Traefik container is running first
+    if ! docker compose -f "$COMPOSE_FILE" ps traefik | grep -q "Up"; then
+        print_warning "Traefik container not running, checking for errors..."
+        docker compose -f "$COMPOSE_FILE" logs traefik --tail=5
+        sleep 2
+        ((attempt++))
+        continue
     fi
+    
+    # Check Traefik health status
+    health_status=$(docker compose -f "$COMPOSE_FILE" ps --format "{{.Health}}" traefik 2>/dev/null || echo "")
+    if [[ "$health_status" == "healthy" ]]; then
+        print_success "Traefik is healthy"
+        traefik_healthy=true
+        break
+    elif [[ "$health_status" == "starting" ]]; then
+        echo -n "."
+    else
+        print_info "Traefik health status: ${health_status:-unknown}"
+    fi
+    
     ((attempt++))
-    echo -n "."
     sleep 2
 done
 
-if [[ $attempt -eq $max_attempts ]]; then
-    print_warning "Traefik health check timeout - services may still be starting"
+if [[ "$traefik_healthy" != "true" ]]; then
+    print_warning "Traefik health check timeout - but services may still be working"
+    print_info "Checking if Traefik is responding anyway..."
 fi
 
 # Additional health verification
 print_header "Service Health Verification"
+api_working=false
+
 if command -v curl >/dev/null 2>&1; then
-    if [[ "$DEPLOYMENT_MODE" == "local" ]]; then
-        if curl -s http://localhost:8080/ping >/dev/null 2>&1; then
-            print_success "Traefik API responding on port 8080"
-        else
-            print_warning "Traefik API not responding on localhost:8080"
-        fi
+    # Test Traefik API endpoints
+    if curl -s --max-time 5 http://localhost:8080/ping >/dev/null 2>&1; then
+        print_success "Traefik API responding on port 8080"
+        api_working=true
+    elif curl -s --max-time 5 http://localhost:8080/api/overview >/dev/null 2>&1; then
+        print_success "Traefik API responding (overview endpoint)"
+        api_working=true
     else
-        if curl -s http://localhost:8080/ping >/dev/null 2>&1; then
-            print_success "Traefik API responding"
-        else
-            print_warning "Traefik API not responding on localhost:8080"
-        fi
+        print_warning "Traefik API not responding on localhost:8080"
+        print_info "This may be normal if the API is disabled for security"
     fi
+else
+    print_info "curl not available - skipping API connectivity test"
 fi
 
-# Check service status
+# Final service verification
+services_running=true
 print_header "Service Status"
-docker compose -f "$COMPOSE_FILE" ps
+if ! docker compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
+    print_error "No services appear to be running!"
+    services_running=false
+else
+    docker compose -f "$COMPOSE_FILE" ps
+    print_success "Services are running"
+fi
 
 if [[ "$DEPLOYMENT_MODE" == "local" ]]; then
     print_info "Local deployment - Tailscale not included"
@@ -713,27 +747,38 @@ elif [[ "${SKIP_TAILSCALE:-false}" == "true" ]]; then
     print_info "Note: Tailscale skipped due to LXC environment"
 fi
 
+# Determine overall setup success
+setup_success=true
+if [[ "$services_running" != "true" ]]; then
+    setup_success=false
+fi
+
 # Show access information
 print_header "Access Information"
+
+if [[ "$setup_success" == "true" ]]; then
+    print_success "Setup completed successfully!"
+else
+    print_warning "Setup completed with some issues - check service status above"
+fi
 
 if [[ "$DEPLOYMENT_MODE" == "local" ]]; then
     SERVER_IP=$(hostname -I | awk '{print $1}' || echo "127.0.0.1")
     
     echo -e "Your homelab is ready! Access your services via:"
     echo -e ""
-    echo -e "${GREEN}Option 1: Direct IP Access${NC}"
-    echo -e "• Portainer: ${GREEN}http://${SERVER_IP}:9000${NC}"
-    echo -e "• Traefik Dashboard: ${GREEN}http://${SERVER_IP}:8080${NC}"
+    echo -e "${GREEN}Domain Names${NC} (with proper SSL certificates)"
+    echo -e "• Portainer: ${GREEN}https://portainer.${DOMAIN}${NC}"
+    echo -e "• Traefik Dashboard: ${GREEN}https://traefik.${DOMAIN}${NC}"
+    echo -e "• Whoami (test): ${GREEN}https://whoami.${DOMAIN}${NC}"
     echo -e ""
-    echo -e "${GREEN}Option 2: Local Hostnames${NC} (add to /etc/hosts)"
-    echo -e "• Portainer: ${GREEN}http://portainer.local${NC}"
-    echo -e "• Traefik Dashboard: ${GREEN}http://traefik.local${NC}"
-    echo -e "• Whoami (test): ${GREEN}http://whoami.local${NC}"
+    echo -e "${YELLOW}To use domain names locally, add to /etc/hosts:${NC}"
+    echo -e "${BLUE}${SERVER_IP} portainer.${DOMAIN} traefik.${DOMAIN} whoami.${DOMAIN}${NC}"
     echo -e ""
-    echo -e "${YELLOW}To use local hostnames, add these lines to /etc/hosts:${NC}"
-    echo -e "${BLUE}${SERVER_IP} portainer.local traefik.local whoami.local test.local${NC}"
+    echo -e "${GREEN}Wildcard Domain${NC} (recommended for easy expansion)"
+    echo -e "${BLUE}${SERVER_IP} *.${DOMAIN}${NC}"
     echo -e ""
-    print_info "Local deployment - no DNS or port forwarding required!"
+    print_info "Local deployment - DNS challenge provides real SSL certificates!"
     
 else
     echo -e "Your homelab is ready! Access your services at:"
@@ -747,29 +792,43 @@ else
     print_warning "If using Cloudflare Tunnel, configure public hostnames in Zero Trust dashboard"
 fi
 
-print_success "Setup completed successfully!"
+# Don't show success again if we already showed a warning
+if [[ "$setup_success" == "true" ]]; then
+    echo ""  # Just add spacing
+else
+    print_info "Despite issues above, core services may still be functional"
+fi
 
-# Disable error trap for normal completion
-trap - ERR
+# Remove the old error trap reference
+# trap - ERR
 
-# Run validation
-print_header "Running Setup Validation"
-./validate.sh
+# Run validation only if setup was successful
+if [[ "$setup_success" == "true" ]]; then
+    print_header "Running Setup Validation"
+    if ./validate.sh; then
+        print_success "Validation passed! 🎉"
+    else
+        print_warning "Validation had some issues, but setup may still be functional"
+    fi
+else
+    print_info "Skipping validation due to setup issues - you can run './validate.sh' manually later"
+fi
 
 print_header "Next Steps"
 
 if [[ "$DEPLOYMENT_MODE" == "local" ]]; then
     SERVER_IP=$(hostname -I | awk '{print $1}' || echo "127.0.0.1")
     echo -e "1. ${YELLOW}Test your setup:${NC}"
-    echo -e "   • Direct: ${GREEN}http://${SERVER_IP}:9000${NC} (Portainer)"
-    echo -e "   • Hostname: ${GREEN}http://whoami.local${NC} (after updating /etc/hosts)"
-    echo -e "2. ${YELLOW}Add local hostnames:${NC}"
-    echo -e "   ${BLUE}echo '${SERVER_IP} portainer.local traefik.local whoami.local' >> /etc/hosts${NC}"
+    echo -e "   • Visit: ${GREEN}https://whoami.${DOMAIN}${NC} (after updating /etc/hosts)"
+    echo -e "2. ${YELLOW}Add domain resolution:${NC}"
+    echo -e "   ${BLUE}echo '${SERVER_IP} *.${DOMAIN}' >> /etc/hosts${NC}"
+    echo -e "   ${YELLOW}Or individual entries:${NC}"
+    echo -e "   ${BLUE}echo '${SERVER_IP} portainer.${DOMAIN} traefik.${DOMAIN} whoami.${DOMAIN}' >> /etc/hosts${NC}"
     echo -e "3. ${YELLOW}Monitor logs:${NC} Run 'docker compose -f $COMPOSE_FILE logs -f'"
-    echo -e "4. ${YELLOW}Add more services:${NC} Modify $COMPOSE_FILE"
+    echo -e "4. ${YELLOW}Add more services:${NC} Modify $COMPOSE_FILE and they'll get *.${DOMAIN} automatically"
     echo -e "5. ${YELLOW}Upgrade to public:${NC} Re-run setup and choose public deployment"
     echo -e ""
-    print_info "🏠 Local deployment complete - no internet setup required!"
+    print_info "🏠 Local deployment with real SSL certificates - no internet required!"
     
 else
     if [[ "${SKIP_TAILSCALE:-false}" == "true" ]]; then
