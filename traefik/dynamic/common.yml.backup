@@ -1,6 +1,14 @@
 http:
   middlewares:
-    # Compression for better performance
+    # Comp    # Admin IP allowlist (uncomment and customize for admin services)
+    admin-allowlist:
+      ipAllowList:
+        sourceRange:
+          - "100.64.0.0/10"  # Tailscale CGNAT range
+          - "127.0.0.1/32"
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"or better performance
     compress:
       compress:
         excludedContentTypes:
@@ -29,16 +37,15 @@ http:
         period: 1m
         burst: 50
 
-    # Admin IP allowlist (disabled for local installations)
-    # Uncomment and customize for admin services if needed
-    # admin-allowlist:
-    #   ipAllowList:
-    #     sourceRange:
-    #       - "100.64.0.0/10"  # Tailscale CGNAT range
-    #       - "127.0.0.1/32"
-    #       - "10.0.0.0/8"
-    #       - "172.16.0.0/12"
-    #       - "192.168.0.0/16"
+    # Admin IP whitelist (uncomment and customize for admin services)
+    admin-allowlist:
+      ipWhiteList:
+        sourceRange:
+          - "100.64.0.0/10"  # Tailscale CGNAT range
+          - "127.0.0.1/32"
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
 
     # Default headers for all services
     default-headers:

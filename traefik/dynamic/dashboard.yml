@@ -1,16 +1,7 @@
 http:
-  middlewares:
-    dashboard-auth:
-      basicAuth:
-        # Use TRAEFIK_DASHBOARD_AUTH from .env
-        # Generate with: htpasswd -nb admin 'yourpassword'
-        users:
-          - "admin:$$apr1$$Vwj2VjoW$$vKvCxqmNP64x/OoWY7NCK/"
-
   routers:
-    # Traefik dashboard for primary domain
     traefik-dashboard:
-      rule: "Host(`traefik.xuper.fun`)"
+      rule: "Host(`traefik.hl1.xuper.fun`)"
       entryPoints: [websecure]
       service: api@internal
       tls:
@@ -18,18 +9,3 @@ http:
       middlewares:
         - compress@file
         - security-headers@file
-        - dashboard-auth
-        - admin-allowlist@file
-    
-    # Additional domains (uncomment and configure if using DOMAIN2, DOMAIN3)
-    # traefik-dashboard-alt:
-    #   rule: "Host(`traefik.${DOMAIN2:-disabled.local}`)"
-    #   entryPoints: [websecure]
-    #   service: api@internal
-    #   tls:
-    #     certresolver: letsencrypt
-    #   middlewares:
-    #     - compress@file
-    #     - security-headers@file
-    #     - dashboard-auth
-    #     - admin-allowlist@file

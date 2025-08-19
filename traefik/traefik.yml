@@ -28,7 +28,7 @@ providers:
     watch: true
   docker:
     endpoint: "tcp://socket-proxy:2375"
-    network: "proxy"
+    network: "docker-traefik-apps_proxy"
     exposedByDefault: false
     watch: true
 

@@ -647,6 +647,10 @@ print_success "Images pulled successfully"
 # Start services
 print_header "Starting Services"
 
+# Generate dashboard configuration based on authentication settings
+print_info "Configuring dashboard authentication..."
+./generate-dashboard-config.sh
+
 if [[ "$DEPLOYMENT_MODE" == "local" ]]; then
     docker compose -f "$COMPOSE_FILE" up -d
     print_success "Local services started"
