@@ -45,14 +45,166 @@ cleanup_on_error() {
 # Set trap for error handling
 trap cleanup_on_error ERR
 
+# Check Docker installation and install if missing
+check_and_install_docker() {
+    print_header "Docker Installation Check"
+    
+    # Check if Docker is installed
+    if ! command -v docker >/dev/null 2>&1; then
+        print_warning "Docker is not installed. Installing Docker..."
+        
+        # Detect the operating system
+        if [[ -f /etc/os-release ]]; then
+            . /etc/os-release
+            OS=$ID
+        else
+            print_error "Cannot detect operating system"
+            exit 1
+        fi
+        
+        case $OS in
+            "ubuntu"|"debian")
+                print_info "Detected Debian/Ubuntu - installing Docker via official script"
+                # Install prerequisites
+                apt-get update
+                apt-get install -y curl ca-certificates
+                
+                # Install Docker using official script
+                curl -fsSL https://get.docker.com -o get-docker.sh
+                sh get-docker.sh
+                rm get-docker.sh
+                
+                # Enable and start Docker service
+                systemctl enable docker
+                systemctl start docker
+                ;;
+            "centos"|"rhel"|"fedora")
+                print_info "Detected Red Hat/CentOS/Fedora - installing Docker"
+                if command -v dnf >/dev/null 2>&1; then
+                    dnf install -y docker-ce docker-ce-cli containerd.io
+                else
+                    yum install -y docker-ce docker-ce-cli containerd.io
+                fi
+                systemctl enable docker
+                systemctl start docker
+                ;;
+            "alpine")
+                print_info "Detected Alpine - installing Docker"
+                apk update
+                apk add docker docker-compose
+                rc-update add docker boot
+                service docker start
+                ;;
+            *)
+                print_warning "Unknown OS: $OS - trying generic installation"
+                curl -fsSL https://get.docker.com -o get-docker.sh
+                sh get-docker.sh
+                rm get-docker.sh
+                ;;
+        esac
+        
+        # Verify installation
+        sleep 5
+        if command -v docker >/dev/null 2>&1; then
+            print_success "Docker installed successfully"
+        else
+            print_error "Docker installation failed"
+            exit 1
+        fi
+    else
+        print_success "Docker is already installed"
+    fi
+    
+    # Check Docker service status
+    if ! docker info >/dev/null 2>&1; then
+        print_info "Starting Docker service..."
+        
+        # Try different service managers
+        if systemctl is-active --quiet docker 2>/dev/null; then
+            print_success "Docker service is running"
+        elif systemctl start docker 2>/dev/null; then
+            print_success "Docker service started via systemctl"
+        elif service docker start 2>/dev/null; then
+            print_success "Docker service started via service command"
+        else
+            print_error "Could not start Docker service"
+            print_info "Please start Docker manually and re-run the script"
+            exit 1
+        fi
+        
+        # Wait for Docker to be ready
+        print_info "Waiting for Docker to be ready..."
+        for i in {1..30}; do
+            if docker info >/dev/null 2>&1; then
+                break
+            fi
+            sleep 1
+        done
+    fi
+    
+    # Final Docker check
+    if docker info >/dev/null 2>&1; then
+        print_success "Docker is running and accessible"
+        DOCKER_VERSION=$(docker version --format '{{.Server.Version}}' 2>/dev/null || echo "unknown")
+        print_info "Docker version: $DOCKER_VERSION"
+    else
+        print_error "Docker is installed but not accessible"
+        print_info "You may need to:"
+        print_info "1. Add your user to the docker group: sudo usermod -aG docker \$USER"
+        print_info "2. Restart your session or run: newgrp docker"
+        print_info "3. Start Docker service: sudo systemctl start docker"
+        exit 1
+    fi
+    
+    # Check Docker Compose
+    if ! docker compose version >/dev/null 2>&1; then
+        print_warning "Docker Compose plugin not found - trying to install"
+        
+        # Docker Compose should come with modern Docker installations
+        # Try to install it manually if missing
+        if [[ -f /etc/os-release ]]; then
+            . /etc/os-release
+            case $ID in
+                "ubuntu"|"debian")
+                    apt-get update
+                    apt-get install -y docker-compose-plugin
+                    ;;
+                "centos"|"rhel"|"fedora")
+                    if command -v dnf >/dev/null 2>&1; then
+                        dnf install -y docker-compose-plugin
+                    else
+                        yum install -y docker-compose-plugin
+                    fi
+                    ;;
+                "alpine")
+                    apk add docker-compose
+                    ;;
+            esac
+        fi
+        
+        # Final check
+        if docker compose version >/dev/null 2>&1; then
+            print_success "Docker Compose is available"
+        else
+            print_error "Docker Compose installation failed"
+            print_info "Please install Docker Compose manually"
+            exit 1
+        fi
+    else
+        print_success "Docker Compose is available"
+        COMPOSE_VERSION=$(docker compose version --short 2>/dev/null || echo "unknown")
+        print_info "Docker Compose version: $COMPOSE_VERSION"
+    fi
+}
+
 # Minimum system requirements check
 check_system_requirements() {
     print_header "System Requirements Check"
     
-    # Check available disk space (minimum 2GB)
+    # Check available disk space (minimum 1GB)
     available_space=$(df . | awk 'NR==2 {print $4}')
-    if [[ $available_space -lt 2097152 ]]; then  # 2GB in KB
-        print_error "Insufficient disk space. At least 2GB required."
+    if [[ $available_space -lt 1048576 ]]; then  # 1GB in KB
+        print_error "Insufficient disk space. At least 1GB required."
         exit 1
     fi
     print_success "Sufficient disk space available"
@@ -67,20 +219,15 @@ check_system_requirements() {
         fi
     fi
     print_success "Required ports appear to be available"
-    
-    # Check Docker version
-    docker_version=$(docker version --format '{{.Server.Version}}' 2>/dev/null || echo "unknown")
-    print_success "Docker version: $docker_version"
-    
-    # Check Docker Compose version
-    compose_version=$(docker compose version --short 2>/dev/null || echo "unknown")
-    print_success "Docker Compose version: $compose_version"
 }
 
 print_header "Homelab Setup Script - Enhanced"
 
 # Run system requirements check
 check_system_requirements
+
+# Check and install Docker if needed
+check_and_install_docker
 
 # Check if .env exists
 if [[ ! -f ".env" ]]; then
@@ -156,21 +303,6 @@ fi
 # Create backup directory
 mkdir -p backups
 print_success "Created backups directory"
-
-# Check if Docker is running
-print_header "Checking Docker"
-if ! docker info >/dev/null 2>&1; then
-    print_error "Docker is not running or not accessible"
-    exit 1
-fi
-print_success "Docker is running"
-
-# Check if Compose is available
-if ! docker compose version >/dev/null 2>&1; then
-    print_error "Docker Compose is not available"
-    exit 1
-fi
-print_success "Docker Compose is available"
 
 # Pull images
 print_header "Pulling Images"

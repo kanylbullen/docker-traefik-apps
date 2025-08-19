@@ -56,6 +56,99 @@ function Invoke-Cleanup {
     }
 }
 
+# Check and install Docker if needed
+function Install-Docker {
+    Write-Header "Docker Installation Check"
+    
+    # Check if Docker is installed
+    try {
+        $null = Get-Command docker -ErrorAction Stop
+        Write-Success "Docker is already installed"
+    } catch {
+        Write-Warning "Docker is not installed. Installing Docker Desktop..."
+        
+        # Check if we're on Windows 10/11 with WSL2
+        $osVersion = [System.Environment]::OSVersion.Version
+        if ($osVersion.Major -ge 10) {
+            Write-Info "Detected Windows 10/11 - Docker Desktop is recommended"
+            Write-Info "Please install Docker Desktop manually from: https://docs.docker.com/desktop/install/windows-install/"
+            Write-Info "After installation, restart this script."
+            Read-Host "Press Enter after installing Docker Desktop"
+            
+            # Check again after manual installation
+            try {
+                $null = Get-Command docker -ErrorAction Stop
+                Write-Success "Docker is now available"
+            } catch {
+                Write-Error "Docker is still not available. Please ensure Docker Desktop is installed and running."
+                exit 1
+            }
+        } else {
+            Write-Error "Windows version not supported for automatic Docker installation"
+            Write-Info "Please install Docker manually and re-run this script"
+            exit 1
+        }
+    }
+    
+    # Check Docker service status
+    try {
+        $dockerInfo = docker info 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Docker not accessible"
+        }
+        Write-Success "Docker is running and accessible"
+        
+        # Get Docker version
+        try {
+            $dockerVersion = docker version --format '{{.Server.Version}}' 2>$null
+            Write-Info "Docker version: $dockerVersion"
+        } catch {
+            Write-Info "Docker version: unknown"
+        }
+        
+    } catch {
+        Write-Warning "Docker is installed but not running"
+        Write-Info "Please start Docker Desktop and wait for it to be ready"
+        Write-Info "You can check Docker status with: docker info"
+        
+        # Wait for user to start Docker
+        do {
+            Read-Host "Press Enter when Docker Desktop is running"
+            try {
+                $null = docker info 2>$null
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "Docker is now running"
+                    break
+                } else {
+                    Write-Warning "Docker is still not accessible. Please ensure Docker Desktop is running."
+                }
+            } catch {
+                Write-Warning "Docker is still not accessible. Please ensure Docker Desktop is running."
+            }
+        } while ($true)
+    }
+    
+    # Check Docker Compose
+    try {
+        $null = docker compose version 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "Docker Compose is available"
+            try {
+                $composeVersion = docker compose version --short 2>$null
+                Write-Info "Docker Compose version: $composeVersion"
+            } catch {
+                Write-Info "Docker Compose version: unknown"
+            }
+        } else {
+            throw "Docker Compose not available"
+        }
+    } catch {
+        Write-Error "Docker Compose is not available"
+        Write-Info "Please ensure you have Docker Desktop with Compose plugin installed"
+        exit 1
+    }
+}
+
 # System requirements check
 function Test-SystemRequirements {
     Write-Header "System Requirements Check"
@@ -87,28 +180,15 @@ function Test-SystemRequirements {
         }
     }
     Write-Success "Required ports appear to be available"
-    
-    # Check Docker version
-    try {
-        $dockerVersion = docker version --format '{{.Server.Version}}' 2>$null
-        Write-Success "Docker version: $dockerVersion"
-    } catch {
-        Write-Success "Docker version: unknown"
-    }
-    
-    # Check Docker Compose version
-    try {
-        $composeVersion = docker compose version --short 2>$null
-        Write-Success "Docker Compose version: $composeVersion"
-    } catch {
-        Write-Success "Docker Compose version: unknown"
-    }
 }
 
 Write-Header "Homelab Setup Script (Windows) - Enhanced"
 
 # Run system requirements check
 Test-SystemRequirements
+
+# Check and install Docker if needed
+Install-Docker
 
 # Check if .env exists
 if (-not (Test-Path ".env")) {
@@ -176,30 +256,12 @@ try {
     Write-Warning "Created $traefikAcmePath directory (permissions might need manual adjustment)"
 }
 
-# Check if Docker is running
-Write-Header "Checking Docker"
-try {
-    $dockerInfo = docker info 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Docker not accessible"
-    }
-    Write-Success "Docker is running"
-} catch {
-    Write-Error "Docker is not running or not accessible"
-    exit 1
+# Create backup directory
+$backupPath = "backups"
+if (-not (Test-Path $backupPath)) {
+    New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
 }
-
-# Check if Compose is available
-try {
-    docker compose version | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Docker Compose not available"
-    }
-    Write-Success "Docker Compose is available"
-} catch {
-    Write-Error "Docker Compose is not available"
-    exit 1
-}
+Write-Success "Created backups directory"
 
 # Pull images
 Write-Header "Pulling Images"
