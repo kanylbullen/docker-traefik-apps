@@ -1,8 +1,4 @@
 # Private Local Access - No Public Exposure
-# Uses Traefik for SSL termination with Let's Encrypt via DNS challenge
-# All services accessible only on local network
-
-version: '3.8'
 
 networks:
   proxy:
@@ -10,6 +6,7 @@ networks:
 
 volumes:
   portainer_data:
+  tailscale_data:
 
 services:
   # Docker Socket Proxy for security
@@ -136,5 +133,4 @@ services:
       - tailscale
       - vpn
 
-volumes:
-  tailscale_data:
+

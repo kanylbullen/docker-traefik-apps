@@ -339,8 +339,6 @@ configure_public_tunnel_deployment() {
 }
 
 configure_private_local_deployment() {
-
-configure_private_local_deployment() {
     print_header "Private Local Access Configuration"
     
     # For private local, we still use DNS challenge for valid certificates
@@ -510,10 +508,7 @@ if [[ -f ".env" ]]; then
     export $(cat .env | grep -v '^#' | xargs)
 fi
 
-# Override domain if local deployment
-if [[ "$DEPLOYMENT_MODE" == "local" ]]; then
-    export DOMAIN="${LOCAL_DOMAIN}"
-fi
+# Domain handling is done per deployment type in their respective functions
 
 # Validate required environment variables based on deployment mode
 print_header "Validating Configuration"
@@ -623,10 +618,12 @@ fi
 print_info "Using compose file: $COMPOSE_FILE"
 
 # Create proxy network if it doesn't exist
-if ! docker network ls | grep -q proxy; then
+if ! docker network ls --filter name=proxy --format "{{.Name}}" | grep -q "^proxy$"; then
     print_info "Creating proxy network..."
     docker network create proxy
     print_success "Created proxy network"
+else
+    print_info "Proxy network already exists"
 fi
 
 # Create volumes if they don't exist
@@ -795,3 +792,4 @@ print_info "For detailed diagnostics: ./health-check.sh"
 if [[ "${SKIP_TAILSCALE:-false}" == "true" ]]; then
     print_info "LXC-specific guide: cat LXC-SETUP.md"
 fi
+

@@ -1,8 +1,4 @@
 # Public Tunnel Access - No Port Forwarding Required
-# Uses Cloudflare Tunnel for secure public access
-# Traefik used for internal routing and SSL termination
-
-version: '3.8'
 
 networks:
   proxy:
@@ -10,6 +6,7 @@ networks:
 
 volumes:
   portainer_data:
+  tailscale_data:
 
 services:
   # Docker Socket Proxy for security
@@ -149,5 +146,4 @@ services:
       - tailscale
       - vpn
 
-volumes:
-  tailscale_data:
+

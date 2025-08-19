@@ -1,8 +1,4 @@
 # Public Direct Access - Port Forwarding Required (80/443)
-# This configuration assumes you have port forwarding set up
-# and DNS records pointing to your public IP
-
-version: '3.8'
 
 networks:
   proxy:
@@ -10,6 +6,7 @@ networks:
 
 volumes:
   portainer_data:
+  tailscale_data:
 
 services:
   # Docker Socket Proxy for security
@@ -136,5 +133,4 @@ services:
       - tailscale
       - vpn
 
-volumes:
-  tailscale_data:
+
