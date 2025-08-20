@@ -103,8 +103,7 @@ get_instance_dir() {
 get_instance_project_name() {
     local role_name="$1"
     local instance_name="$2"
-    local base_project="${COMPOSE_PROJECT_NAME:-homelab}"
-    echo "${base_project}-${role_name}-${instance_name}"
+    echo "homelab-${role_name}-${instance_name}"
 }
 
 # Load role environment with instance-specific variables
@@ -192,15 +191,10 @@ install_role() {
     local instance_dir=$(setup_instance_dir "$role_name" "$instance_name")
     
     print_header "Installing Role: $role_name (Instance: $instance_name)"
-    print_info "Instance directory: $instance_dir"
-    print_info "Current working directory: $(pwd)"
     
     # Check if role has required files
     if [[ ! -f "$instance_dir/docker-compose.yml" ]]; then
         print_error "Role missing docker-compose.yml file"
-        print_error "Looking for: $instance_dir/docker-compose.yml"
-        print_info "Contents of instance directory:"
-        ls -la "$instance_dir" || print_error "Directory does not exist"
         return 1
     fi
     

@@ -16,7 +16,7 @@ services:
       MYSQL_ALLOW_EMPTY_PASSWORD: ${MYSQL_ALLOW_EMPTY_PASSWORD:-false}
       MYSQL_RANDOM_ROOT_PASSWORD: ${MYSQL_RANDOM_ROOT_PASSWORD:-false}
     volumes:
-      - /opt/homelab/instances/${COMPOSE_PROJECT_NAME}/data/mysql:/var/lib/mysql
+      - /opt/homelab/instances/mysql-${INSTANCE_NAME}/data/mysql:/var/lib/mysql
       - ./config/mysql.cnf:/etc/mysql/conf.d/custom.cnf:ro
     networks:
       - proxy

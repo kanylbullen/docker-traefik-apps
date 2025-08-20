@@ -14,7 +14,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_INITDB_ARGS: ${POSTGRES_INITDB_ARGS:---auth-host=md5}
     volumes:
-      - /opt/homelab/instances/${COMPOSE_PROJECT_NAME}/data/postgres:/var/lib/postgresql/data
+      - /opt/homelab/instances/postgresql-${INSTANCE_NAME}/data/postgres:/var/lib/postgresql/data
       - ./config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./init:/docker-entrypoint-initdb.d:ro
     networks:
@@ -43,7 +43,7 @@ services:
       PGADMIN_CONFIG_SERVER_MODE: 'False'
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
     volumes:
-      - /opt/homelab/instances/${COMPOSE_PROJECT_NAME}/data/pgadmin:/var/lib/pgadmin
+      - /opt/homelab/instances/postgresql-${INSTANCE_NAME}/data/pgadmin:/var/lib/pgadmin
       - ./config/servers.json:/pgadmin4/servers.json:ro
     networks:
       - proxy
